@@ -67,7 +67,7 @@ uint8_t request_firmware()
     uid[2] = *((uint32_t *) 0x1FFF7598); //msb
 
     CAN_message msg;
-    msg.id = BOOT_FW_REQUEST;
+    msg.id = CAN_make_ID(BOOT_FW_REQUEST, PRIORITY_HIGH, NO_NODE_ID);
     msg.len = 12;
     for (int i = 0; i < 3; i++)
     {
@@ -95,7 +95,7 @@ uint8_t request_firmware()
         if (rx_state == NO_MESSAGE) HAL_Delay(5);
     } while (
         rx_state != OK || 
-        resp.id != BOOT_FW_ASSIGN ||
+        CAN_MSG_CLASS(resp.id) != BOOT_FW_ASSIGN ||
         !is_recipient(uid, &resp)
     );
 
@@ -104,11 +104,11 @@ uint8_t request_firmware()
 }
 
 /**
- * Receive from master the firmware and flashes it n(chunk by chunk)
+ * Receive from master the firmware and flashes it (chunk by chunk)
  */
 void receive_and_flash_firmware(uint8_t nodeID)
 {
-    return;
+    //1. filter messages based on nodeID
 }
 
 /**

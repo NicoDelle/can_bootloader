@@ -1,13 +1,12 @@
+/**
+ * This header defines primitives of communication meant to be used by both bootloader and application code, both on the jetson and on the MCUs.
+ * Thus, it shall remain as much general as possibile, and shall not makke use of any hardware-specific type. These must be used in the respective .c files, which implement the hereby defined interface
+ */
+
 #include <stdint.h>
-#include "stm32g4xx_hal.h"
-#include "stm32g4xx_hal_fdcan.h"
-
-
-#define BOOT_FW_REQUEST 0x7F0 //Means we are requesting to receive code
-#define BOOT_FW_ASSIGN 0X7F1
-#define BOOT_FW_DATA 0X7F2
-#define BOOT_FW_END 0X7F3
-#define BOOT_FW_ERROR 0X7FF
+#include "stm32g4xx_hal.h" //should not be used here!!
+#include "stm32g4xx_hal_fdcan.h" //should not be used here as well
+#include <assert.h>
 
 typedef enum 
 {
@@ -23,15 +22,47 @@ typedef enum
     GENERIC_ERROR = 0x02U
 } CAN_RX_STATE;
 
+//<----- CAN ARBITRATION FIELD SEMANTICS ----->
+#define CAN_PRIORITY_MASK   0x700  // bits 10:8
+#define CAN_PRIORITY_SHIFT  8
+#define CAN_MSG_CLASS_MASK  0x0F0  // bits 7:4
+#define CAN_MSG_CLASS_SHIFT 4
+#define CAN_NODE_ID_MASK    0x00F  // bits 3:0
+#define CAN_NODE_ID_SHIFT   0
+
+#define CAN_PRIORITY(id)    (((id) & CAN_PRIORITY_MASK) >> CAN_PRIORITY_SHIFT)
+#define CAN_MSG_CLASS(id)   (((id) & CAN_MSG_CLASS_MASK) >> CAN_MSG_CLASS_SHIFT)
+#define CAN_NODE_ID(id)     ((id) & CAN_NODE_ID_MASK >> CAN_NODE_ID_SHIFT)
+
+typedef enum uint8_t
+{
+    BOOT_FW_REQUEST = 0x0U,
+    BOOT_FW_ASSIGN = 0x01U,
+    BOOT_FW_DATA = 0x02U,
+    BOOT_FW_END = 0x03U,
+    BOOT_FW_ERROR = 0x04U
+} boot_msg_class_t;
+typedef uint16_t can_std_id_t;
+typedef enum uint8_t {               // 3-bit priority (0-7)
+    PRIORITY_LOW = 0,
+    PRIORITY_MED,
+    PRIORITY_HIGH,
+    PRIORITY_CRITICAL
+} priority_t;
+
+typedef uint8_t node_ID_t;
+#define NO_NODE_ID    0xF
+#define BROADCAST_ID  0xE
+
 typedef struct 
 {
-    uint32_t id;
+    can_std_id_t id;
     uint8_t len;
     uint8_t data[64];
 } CAN_message;
+//<----- END SECTION ----->
 
 void CAN_init();
-
 /**
  * @brief Queue a CAN(-FD) frame for transmission.
  *
@@ -65,3 +96,4 @@ CAN_TX_STATE CAN_send(const CAN_message *msg);
  */
 CAN_RX_STATE CAN_receive(CAN_message *msg);
 
+static inline can_std_id_t CAN_make_ID(boot_msg_class_t msg_class, priority_t priority, node_ID_t addr);
