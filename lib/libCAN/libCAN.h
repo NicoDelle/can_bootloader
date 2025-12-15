@@ -4,22 +4,22 @@
  */
 
 #include <stdint.h>
-#include "stm32g4xx_hal.h" //should not be used here!!
-#include "stm32g4xx_hal_fdcan.h" //should not be used here as well
+//#include "stm32g4xx_hal.h" //should not be used here!!
+//#include "stm32g4xx_hal_fdcan.h" //should not be used here as well
 #include <assert.h>
 
 typedef enum 
 {
     OK = 0x0U,
-    FIFO_FULL = 0x01U,
-    GENERIC_ERROR = 0x02U,
+    FIFO_FULL,
+    GENERIC_ERROR
 } CAN_TX_STATE;
 
 typedef enum
 {
     OK = 0x0U,
-    NO_MESSAGE = 0x01U,
-    GENERIC_ERROR = 0x02U
+    NO_MESSAGE,
+    GENERIC_ERROR
 } CAN_RX_STATE;
 
 //<----- CAN ARBITRATION FIELD SEMANTICS ----->
@@ -37,10 +37,10 @@ typedef enum
 typedef enum uint8_t
 {
     BOOT_FW_REQUEST = 0x0U,
-    BOOT_FW_ASSIGN = 0x01U,
-    BOOT_FW_DATA = 0x02U,
-    BOOT_FW_END = 0x03U,
-    BOOT_FW_ERROR = 0x04U
+    BOOT_FW_ASSIGN,
+    BOOT_FW_DATA,
+    BOOT_FW_END,
+    BOOT_FW_ERROR
 } boot_msg_class_t;
 typedef uint16_t can_std_id_t;
 typedef enum uint8_t {               // 3-bit priority (0-7)
