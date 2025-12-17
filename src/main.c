@@ -6,8 +6,11 @@
 #include "libCAN.h"
 #include "stm32g4xx_hal.h"
 
-#define STARTING_FIRMWARE_ADDRESS 0x08000400 //Reserving 16KB for the bootloader.
-#define FLASH_END_ADDRESS 0x0801FFFF
+#define STARTING_FIRMWARE_ADDRESS 0x08004000 //Reserving 16KB for the bootloader.
+#define FLASH_END_ADDRESS         0x0801FFFF
+#define BOOTLOADER_FLAG_ADDR      0x08003800 //RESERVE last page of boot memory for persistent metadata
+#define BOOTLOADER_FLAG_ON        0x00
+#define BOOTLOADER_FLAG_OFF       0xFF
 
 typedef enum uint8_t
 {
@@ -54,11 +57,47 @@ void bootloader()
 }
 
 /**
- * Checks a flag in flash memory that detemrines wether the device was asked to enter bootloader mode at the previous boot
+ * @brief Check whether the MCU should enter bootloader mode.
+ *
+ * Reads a persistent flag stored in Flash memory that is set by the
+ * application or an external command before reset.
+ *
+ * @return uint8_t 1 if bootloader mode is requested, 0 otherwise.
  */
 uint8_t bootloader_requested()
 {
-    return 0;
+    uint8_t value = *((volatile uint8_t *) BOOTLOADER_FLAG_ADDR);
+    return value == BOOTLOADER_FLAG_ON; 
+}
+
+/**
+ * @brief Clear the bootloader request flag.
+ *
+ * Erases the Flash page reserved for bootloader metadata, resetting the
+ * bootloader request flag to its default (erased) state.
+ *
+ * This function must be called after a successful firmware update to
+ * ensure normal application boot on the next reset.
+ */
+void clear_bootloader_flag(void)
+{
+    FLASH_EraseInitTypeDef erase = {
+        .TypeErase   = FLASH_TYPEERASE_PAGES,
+        .Page        = (BOOTLOADER_FLAG_ADDR - FLASH_BASE) / FLASH_PAGE_SIZE,
+        .NbPages     = 1
+    };
+
+    uint32_t page_error;
+
+    HAL_FLASH_Unlock();
+    __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_ALL_ERRORS);
+
+    if (HAL_FLASHEx_Erase(&erase, &page_error) != HAL_OK)
+    {
+        //TODO: error handling
+    }
+
+    HAL_FLASH_Lock();
 }
 
 /**
@@ -142,14 +181,14 @@ FLASH_STATE receive_and_flash_firmware(node_ID_t nodeID)
     CAN_RX_STATE rx_state;
     uint32_t address = STARTING_FIRMWARE_ADDRESS; //TO BE CHECKED against binary size of the bootloader
 
+    HAL_FLASH_Unlock();
+    __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_ALL_ERRORS);
     //Receive all the firmware
     do
     {
         rx_state = CAN_receive(&msg);
         if (rx_state == OK && CAN_NODE_ID(msg.id) == nodeID && CAN_MSG_CLASS(msg.id) == BOOT_FW_DATA) //Filter out messages not meant for us
         {
-            HAL_FLASH_Unlock();
-            __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_ALL_ERRORS);
             //flash! 8bytes alignment only
             for (int i = 0; i < msg.len; i += 8)
             {
@@ -164,12 +203,12 @@ FLASH_STATE receive_and_flash_firmware(node_ID_t nodeID)
 
                 address += 8;
             }
-            HAL_FLASH_Lock();
         }
     } while (
         rx_state != GENERIC_ERROR &&
         !(rx_state == OK && CAN_MSG_CLASS(msg.id) == BOOT_FW_END)
     );
+    HAL_FLASH_Lock();
     
     if (rx_state == GENERIC_ERROR) return RX_FAILURE;
 
@@ -196,14 +235,6 @@ uint64_t pack_bytes(CAN_message *msg, int index)
     } //This handles chunks shorted than a dw, cause it will keep the tail of the dw to 1s
 
     return dw;
-}
-
-/**
- * Reset the value of the flag in persistent memory that signals the MCU it has to enter bootloader mode
- */
-void clear_bootloader_flag()
-{
-    return;
 }
 
 /**
